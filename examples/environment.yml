@@ -1,0 +1,20 @@
+name: graphite-examples
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.12
+  - graph-tool=3.0
+  - graphviz
+  - python-graphviz
+  - pandoc
+  - pip
+  - pip:
+      - tensorflow
+      - loom-workflow
+      - -e ../
+
+
+
