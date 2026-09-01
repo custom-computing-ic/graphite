@@ -79,8 +79,10 @@ def run_loop(kind: str = "scripted", *, max_attempts: int = 4,
     loop = AgentLoop(runner, max_attempts=max_attempts)
     try:
         return agent, loop.run(lowering.build_keras_model(), agent), None
-    except RuntimeError as exhausted:
-        return agent, None, exhausted
+    except Exception as failure:
+        # AgentLoop raises once it runs out of attempts; anything else came
+        # out of the agent itself while it was trying to revise the draft.
+        return agent, None, failure
 
 
 def report(agent, result, failure) -> int:
@@ -91,7 +93,11 @@ def report(agent, result, failure) -> int:
         print("  " + attempt.diff.rstrip().replace("\n", "\n  "))
 
     if failure is not None:
-        print(f"\nloop did not converge: {failure}")
+        exhausted = str(failure).startswith("agent loop exceeded max_attempts")
+        reason = ("the contracts kept rejecting the draft"
+                  if exhausted else "the agent could not produce a revision")
+        print(f"\nloop did not converge -- {reason}:\n  "
+              f"{type(failure).__name__}: {failure}")
         return 1
 
     final = len(agent.attempts) + 1

@@ -239,8 +239,10 @@ class ClaudeAgent(RecordingAgent):
             capture_output=True, text=True, timeout=self.timeout,
         )
         if proc.returncode != 0:
+            detail = (proc.stderr.strip() or proc.stdout.strip()
+                      or "no output on stderr or stdout")
             raise RuntimeError(
-                f"claude -p failed ({proc.returncode}): {proc.stderr[-2000:]}"
+                f"claude -p failed ({proc.returncode}): {detail[-2000:]}"
             )
         self.draft.write_text(_extract_module(proc.stdout), encoding="utf-8")
         return f"claude -p ({self.model}) rewrote the draft module"

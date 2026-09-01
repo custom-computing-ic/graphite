@@ -5,7 +5,7 @@ These examples demonstrate Graphite and its Loom integrations:
 1. defining and validating a typed IR;
 2. matching and rewriting graphs with AQL;
 3. importing a Keras model and lowering it from NN-IR to OP-IR;
-4. running Loom's agent loop over a draft task that a contract rejects.
+5. running Loom's agent loop over a draft task that a contract rejects.
 
 ## Create the Conda environment
 
@@ -100,7 +100,7 @@ bias ───────────────┘
 The Pipeline verifies the NN-IR contract after `ImportKerasTask`, repeats the
 lowering Task until it reaches a fixed point, then verifies the OP-IR contract.
 
-## Demo 4: Agent loop over a failing contract
+## Demo 5: Agent loop over a failing contract
 
 Directory: `agent`
 
