@@ -29,9 +29,11 @@ from __future__ import annotations
 
 import difflib
 import importlib.util
+import os
 import re
 import shutil
 import subprocess
+import tempfile
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -232,12 +234,23 @@ class ClaudeAgent(RecordingAgent):
                 "the `claude` CLI is not on PATH; install Claude Code or run "
                 "this example with --agent scripted"
             )
-        proc = subprocess.run(
-            ["claude", "-p", "--model", self.model, "--output-format", "text",
-             "--append-system-prompt", self.SYSTEM],
-            input=BRIEF.format(cls=TASK_CLASS, source=source, feedback=feedback),
-            capture_output=True, text=True, timeout=self.timeout,
-        )
+        env = dict(os.environ)
+        # Inherited, this points the child at the Claude Code app's local proxy
+        # and `claude -p` hangs there until the timeout instead of answering.
+        env.pop("ANTHROPIC_BASE_URL", None)
+        # The reference lowering is a file in this repository. An agent with a
+        # Read tool and the repo as its working directory can open it, so the
+        # child gets no tools and an empty working directory: the trust
+        # boundary the example is about is enforced by the process, not by the
+        # prompt asking nicely.
+        with tempfile.TemporaryDirectory(prefix="agent-loop-") as sandbox:
+            proc = subprocess.run(
+                ["claude", "-p", "--model", self.model, "--output-format", "text",
+                 "--tools", "", "--append-system-prompt", self.SYSTEM],
+                input=BRIEF.format(cls=TASK_CLASS, source=source, feedback=feedback),
+                capture_output=True, text=True, timeout=self.timeout,
+                cwd=sandbox, env=env,
+            )
         if proc.returncode != 0:
             detail = (proc.stderr.strip() or proc.stdout.strip()
                       or "no output on stderr or stdout")
