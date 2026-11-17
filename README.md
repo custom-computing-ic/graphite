@@ -72,6 +72,9 @@ the same Pydantic validation when metadata changes.
 `GraphProcessor` finds AQL patterns and applies one in-place rewrite pass. A
 result contains `matches`, the parsed `pattern`, and a `modified` flag.
 
+See [GraphProcessor.md](GraphProcessor.md) for the AQL grammar, matching
+semantics, rewrites, rewiring, and a complete Dense-lowering walkthrough.
+
 ```python
 from heterograph import HGraph
 from graphite import GraphProcessor
