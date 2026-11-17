@@ -60,6 +60,7 @@ class IsoMatchStrategy(MatchStrategy):
             pattern.igraph, g.igraph, induced=True, subgraph=True, generator=True
         )
         matches = []
+        seen = set()            # host-vertex sets already accepted (dedup)
         for vmap in maps:
             bind, qvx_to_vx = {}, {}
             for q_ivx in pattern.igraph.vertices():
@@ -73,11 +74,18 @@ class IsoMatchStrategy(MatchStrategy):
                 if all(self.eg_check(g, pattern, (qvx_to_vx[e[0]], qvx_to_vx[e[1]]), e)
                        for e in pattern.edges) and self.check(g, pattern, bind) \
                    and (where is None or where(g, **bind)):
+                    if deduplicate:
+                        key = frozenset(bind.values())
+                        if key in seen:
+                            continue
+                        seen.add(key)
                     matches.append(bind)
-        if deduplicate:
-            matches = deduplicate_matches(matches)
-        if max_n > 0:
-            matches = matches[:max_n]
+                    # Stop as soon as the caller has the matches it asked for:
+                    # `maps` is a lazy generator, so this also cuts the
+                    # isomorphism search short instead of enumerating every
+                    # match and slicing afterwards.
+                    if max_n > 0 and len(matches) >= max_n:
+                        break
         return matches, pattern
 
 
