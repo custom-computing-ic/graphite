@@ -4,7 +4,8 @@ These examples demonstrate Graphite and its Loom integrations:
 
 1. defining and validating a typed IR;
 2. matching and rewriting graphs with AQL;
-3. importing a Keras model and lowering it from NN-IR to OP-IR.
+3. importing a Keras model and lowering it from NN-IR to OP-IR;
+5. running Loom's agent loop over a draft task that a contract rejects.
 
 ## Create the Conda environment
 
@@ -98,6 +99,34 @@ bias ───────────────┘
 
 The Pipeline verifies the NN-IR contract after `ImportKerasTask`, repeats the
 lowering Task until it reaches a fixed point, then verifies the OP-IR contract.
+
+## Demo 5: Agent loop over a failing contract
+
+Directory: `agent`
+
+```bash
+python examples/agent/main.py
+```
+
+This demo reuses the Demo 3 pipeline, but replaces its `lower-dense` task
+with an editable draft that a contract rejects. `PipelineRunner` exposes
+`lower-dense` as the only editable slot; the pipeline, the contracts, and the
+reference lowering are never shown to the agent.
+
+The draft's rewrite is correct but omits the graph-level type stamp, so the
+lowered graph still declares itself NN-IR:
+
+```text
+FAIL  valid-OP-IR
+        [error] graph._type: expected 'OP-IR', got 'NN-IR'
+```
+
+`AgentLoop` hands that report to the agent, the agent revises its draft, and
+the unchanged pipeline runs again until every contract passes. The default
+agent is deterministic and needs no model or credentials, so the loop is
+reproducible; `--agent claude` and `--agent taskgen` put a real model behind
+the same seam. `pytest examples/agent/test_agent_loop.py` asserts the
+reject → revise → accept trajectory.
 
 ## General execution note
 
