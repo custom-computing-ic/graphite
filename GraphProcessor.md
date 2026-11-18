@@ -15,11 +15,14 @@ result = processor.run(
 )
 ```
 
-`result` contains:
+The call returns a dictionary with:
 
 - `matches`: dictionaries of AQL identifier to host-graph vertex ID;
 - `pattern`: the parsed Heterograph `QGraph` for `select`;
 - `modified`: whether the graph changed.
+
+`matches` records the bindings found before rewriting, so a matched vertex ID
+may refer to a vertex that the rewrite subsequently deleted.
 
 For the example above, a host path `0 → 1 → 2` yields
 `{"a": 0, "b": 1, "c": 2}` and becomes `0 → 2`. The vertex matched as `b`
@@ -50,8 +53,9 @@ non-linear graph:
 ```
 
 The parser accepts positional values, strings, integers, floats, booleans, and
-key/value pairs. It hands them to `QGraph` callbacks as positional and keyword
-arguments.
+key/value pairs. It passes them to `QGraph` callbacks as positional and keyword
+arguments. The default strategy annotation callbacks accept keyword arguments
+only; using positional arguments requires a custom callback that accepts them.
 
 ### Important GraphProcessor distinction
 
@@ -94,14 +98,18 @@ subclasses can implement semantic matching without changing the processor.
 
 Matches are deduplicated by their set of host vertices (`deduplicate=True` by
 default). This deliberately treats two bindings that cover the same vertex set
-as one match. `max_n` limits the result list after deduplication; `max_n=0`
-means no limit.
+as one match. Set `deduplicate=False` to retain the separate bindings. A
+positive `max_n` limits accepted matches after filtering and deduplication;
+zero or a negative value means no limit. The default isomorphism strategy stops
+searching once it has enough accepted matches; DFS limits its completed results.
 
 `DfsMatchStrategy` is an alternative for tree graphs. It uses Heterograph's DFS
 query processor and is not the default. It is unsuitable for cyclic or
 non-tree host graphs. Its distance callback expects an `xdist` edge property;
 the stock strategy does not populate that property from AQL arguments, so use a
 custom strategy that implements `eg_annotation` before relying on `xdist`.
+Unlike the isomorphism strategy, DFS calls `check` but not `vx_check` or
+`eg_check`; it passes `where` only the named bindings in its signature.
 
 ## Rewrite model
 
@@ -133,7 +141,7 @@ requested, no two selected matches may share a host vertex. Otherwise it raises
 invalidating another precomputed binding.
 
 The processor performs one pass only. A caller that wants a fixed point must
-call it again, or use a pipeline loop such as Loom's `Pipeline.repeat()`.
+call it again in your application, optionally stopping when `modified` is false.
 
 ### Mutation order
 
@@ -173,7 +181,7 @@ receiver {rewire_out: deleted}
 
 The annotated identifier is the receiver and must be present on the RHS. The
 referenced identifier is the source and must be LHS-only, so it will be deleted.
-At most one rewire annotation may appear on a receiver.
+Use one rewire annotation per receiver.
 
 Only **boundary** edges are rewired. If an edge comes from a preserved matched
 vertex, the rewrite must state the corresponding RHS edge explicitly. Graphite
@@ -189,47 +197,29 @@ Here `b` is deleted, `x` is created, the explicit RHS retains the internal
 `a => x => c` path, and any external edges incident to `b` are redirected to
 `x`.
 
-## Dense lowering walkthrough
+## Standalone lowering walkthrough
 
-[`examples/lowering/lower_dense_task.py`](examples/lowering/lower_dense_task.py)
-uses GraphProcessor to lower one NN-IR `Dense` layer into primitive OP-IR
-operations.
+[`examples/lowering/main.py`](examples/lowering/main.py) builds a small
+`Input => Dense => Output` graph and lowers each `Dense` vertex into a
+`MatMul => Activation` chain. Run it from the repository root:
 
-The select pattern is:
-
-```text
-(x | w | b) => d
+```bash
+python examples/lowering/main.py
 ```
 
-It matches three inputs to the same Dense vertex: data `x`, weight `w`, and
-bias `b`. The `_where` callback then enforces the actual IR semantics:
-vertex types, the `data`/`parameter` edge types, and each operand index.
-
-The rewrite is:
+The processor selects `x => dense => y`. The `where` callback checks that the
+middle vertex has `_type` equal to `Dense`. The rewrite replaces it:
 
 ```text
-(x | w) => matmul => bias_add => act {rewire_out: d}; b => bias_add
+select:  x => dense => y
+rewrite: x => matmul => activation => y
 ```
 
-Semicolon composition adds the `b => bias_add` branch to the main chain. The
-identifier comparison produces this mapping:
-
-| LHS | RHS | Outcome |
-| --- | --- | --- |
-| `x`, `w`, `b` | `x`, `w`, `b` | Preserved input vertices |
-| `d` | absent | Delete the Dense vertex |
-| absent | `matmul`, `bias_add`, `act` | Create primitive operation vertices |
-
-`rewire_out: d` transfers the Dense layer's external consumers to `act`,
-which becomes the new output of the lowered subgraph. The callback initializes
-the three created operation vertices, retypes `w` and `b` as `Weight` and
-`Bias`, and assigns metadata to every new edge.
-
-Adjacent Dense layers can share a vertex, so two such matches overlap. The
-example passes `max_n=1` to select one match per call, then relies on
-`Pipeline.repeat()` to lower the next layer in a later pass. After a successful
-rewrite it updates the graph-level IR type and validates the final graph with a
-`GraphSchemaContract`.
+The `finalize` callback labels the two created vertices and returns `True`.
+The example uses `max_n=1` to avoid overlapping matches, then repeats the
+pass until `modified` is false. It checks the resulting vertex types. This is
+a graph-rewriting demonstration; it does not execute a numerical model or
+validate the lowered graph against a schema.
 
 ## Snapshots and errors
 
@@ -238,8 +228,11 @@ records the graph before and after the pass in Heterograph's `WebView`; call
 `snapshot_view()` to display them. Use `snapshot=False` in headless scripts
 and tests.
 
-Common deliberate errors are overlapping rewrite matches, a rewire source that
-is not deleted, a missing explicit internal RHS edge created by rewiring, and a
-`finalize` callback that returns a non-boolean or removes planned cleanup.
+Common errors include overlapping rewrite matches, a rewire source that is not
+deleted, a missing explicit internal RHS edge, and a `finalize` callback that
+returns a non-boolean or removes planned cleanup. Overlap is checked before
+rewriting, but other errors can occur after mutation has begun. Rewrites are
+not transactional: an exception does not roll back earlier changes. If the
+original graph must be preserved on failure, operate on a copy.
 
 

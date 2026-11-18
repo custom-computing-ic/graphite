@@ -1,4 +1,4 @@
-name: graphite-examples
+name: graphite
 
 channels:
   - conda-forge
@@ -11,10 +11,9 @@ dependencies:
   - python-graphviz
   - pandoc
   - pip
+  - pytest
   - pip:
-      - tensorflow
-      - loom-workflow
-      - -e ../
+      - -e .
 
 
 

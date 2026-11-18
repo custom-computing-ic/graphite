@@ -1,24 +1,42 @@
 # Graphite
 
 Graphite is a Python toolkit for describing, validating, matching, and
-rewriting Heterograph-based intermediate representations (IRs). It also
-provides contracts for checking the output of a graph workflow. Graphite has no
-Loom dependency; any object with an `output` attribute can be verified.
+rewriting Heterograph-based intermediate representations (IRs). Graphite is independent of workflow orchestration frameworks.
+
+For pattern matching, rewrites, and examples, see the [GraphProcessor guide](GraphProcessor.md).
+
+## Installation
+
+### Conda (development)
+
+From the repository root, create an environment with Graphite installed in editable mode. Changes to the source take effect immediately:
+
+```bash
+conda env create -f environment.yml
+conda activate graphite
+pytest
+```
+
+### pip
+
+Graphite requires Python 3.10 or newer and `graph-tool`. For Ubuntu:  
+```bash
+apt-get install python3-graph-tool
+```  
+
+For other graph-tool installation options, see the [graph-tool installation documentation](https://graph-tool.skewed.de/installation.html).
+
+Then install [graphite-ir from PyPI](https://pypi.org/project/graphite-ir/):
+
+```bash
+python -m pip install graphite-ir
+```
 
 ## Examples
 
-The runnable examples are in [`examples/`](examples). `validation` and
-`processor_tests` require Graphite only; `lowering` and `agent` are Graphite
-and Loom integration examples.
-
-To run the examples, it is highly recommended to install conda to install OS-dependent libraries such as `graph-tool`.
-
-```bash
-cd examples/
-conda env create -f environment.yml
-conda activate graphite-examples
-```
-
+The runnable examples are in [`examples/`](examples). The validation,
+processor, and lowering examples use Graphite directly; see the
+[examples README](examples/README.md) for commands and descriptions.
 
 ## IR schemas
 
@@ -113,50 +131,5 @@ processor.run(
 Heterograph WebView. Use `snapshot=False` for scripts and tests without a
 viewer.
 
-## Contracts
 
-`Contract` evaluates one object with an `output` attribute and returns a
-`ContractResult`. `Verifier` runs a collection of contracts, retaining all
-results; if any fail, it raises `ContractException` with the individual
-failures.
-
-`GraphSchemaContract` validates a result's graph output against a schema:
-
-```python
-from dataclasses import dataclass
-
-from graphite import GraphSchemaContract, Verifier
-
-
-@dataclass
-class BuildResult:
-    output: object
-
-
-checks = Verifier([GraphSchemaContract(ir)])
-contract_results = checks.verify(BuildResult(output=graph))
-assert contract_results["valid-ArithmeticIR"].passed
-```
-
-Custom contracts can check domain-specific properties:
-
-```python
-from graphite import Contract, ContractResult
-
-
-class HasVertices(Contract):
-    def __init__(self):
-        super().__init__(name="has-vertices")
-
-    def evaluate(self, result):
-        count = len(result.output.vertices)
-        return ContractResult(
-            passed=count > 0,
-            output=result.output,
-            metrics={"vertex_count": count},
-        )
-```
-
-For complete examples, see [`examples/validation`](examples/validation),
-[`examples/processor_tests`](examples/processor_tests), and the Loom-backed
-[`examples/lowering`](examples/lowering) workflow.
+The standalone lowering example is in [`examples/lowering`](examples/lowering).

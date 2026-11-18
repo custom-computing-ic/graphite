@@ -1,8 +1,4 @@
 """Small executable experiments for GraphProcessor matching and rewriting.
-
-Run from the repository root with::
-
-    python examples/processor_rewriting/main.py
 """
 
 from heterograph import HGraph
